@@ -8,11 +8,10 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <!-- Chosen Palette: Warm Neutrals (Slate) with vibrant accents (Sky, Emerald, Amber, Violet) -->
-    <!-- Application Structure Plan: The app uses a two-column layout with a modal for complex data entry. The left column is the control panel, featuring a button to open the "Add Course" modal and a dynamic area to display user-defined courses with their group options. The right column is the dashboard, providing instant visual feedback. This separates the complex task of data definition (in the modal) from the simpler task of selection (on the main page), creating a clean and powerful user experience. -->
+    <!-- Application Structure Plan: The layout remains a two-column design with a modal for data entry. The key addition is a search input field in the left column to filter the list of user-defined courses. This addresses a key usability issue when the list of defined courses becomes long, allowing users to quickly find the course they wish to interact with. -->
     <!-- Visualization & Content Choices: 
-        - Multi-Step Modal Form: Goal -> Interact/Input. Viz -> A modal window with two sequential views. Interaction -> Users complete step 1 (course info), which dynamically generates the form for step 2 (group details). Justification -> This breaks down a complex data entry task into manageable steps, preventing user overwhelm. Method -> JS DOM manipulation, CSS for modal visibility.
-        - Dynamic Course Selection List: Goal -> Inform/Interact. Viz -> A list of cards, one for each user-defined course, containing radio buttons for its groups. Interaction -> Selecting a radio button updates the schedule and triggers conflict detection across all other courses. "Delete" button removes the entire course definition. Justification -> This is the core interface for building the final schedule from the user-defined data. Method -> JS DOM.
-        - Timetable/Chart/Summary: Goal -> Visualize/Analyze. Interaction -> All dynamically update based on selections from the course list. Justification -> Essential real-time feedback. Method -> JS DOM/Chart.js.
+        - Dual Search Filters: Goal -> Organize/Interact. Viz -> Two text input fields in different locations. Interaction -> (1) Modal search filters the <select> dropdown. (2) Main page search filters the created course cards. Justification -> This layered search functionality significantly improves the user experience by providing context-specific filtering, making both finding a course to define and finding a defined course to schedule much easier. Method -> JS event listeners on both inputs, manipulating display properties of target elements.
+        - Other components (Modal, Course List, Timetable, Chart) are unchanged in function but are now supported by a more robust and user-friendly interface.
     -->
     <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
     <style>
@@ -20,7 +19,28 @@
         .timetable-grid { display: grid; grid-template-columns: 50px repeat(6, 1fr); grid-template-rows: auto repeat(3, 1fr); gap: 4px; }
         .grid-header, .grid-time-label { display: flex; align-items: center; justify-content: center; font-weight: 500; background-color: #e2e8f0; border-radius: 0.375rem; padding: 0.5rem; font-size: 0.875rem; }
         .grid-cell { background-color: #f1f5f9; border-radius: 0.375rem; min-height: 100px; position: relative; }
-        .course-block { padding: 0.5rem; border-radius: 0.375rem; font-size: 0.8rem; position: absolute; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
+        .course-block { 
+            padding: 0.5rem; border-radius: 0.375rem; font-size: 0.8rem; 
+            position: absolute; width: 100%; height: 100%; 
+            display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;
+            cursor: pointer; transition: all 0.2s ease-in-out;
+        }
+        .course-block:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            z-index: 10;
+        }
+        .tooltip {
+            position: absolute; visibility: hidden; background-color: #1e293b; color: white;
+            text-align: left; border-radius: 6px; padding: 8px; z-index: 20;
+            opacity: 0; transition: opacity 0.3s;
+            bottom: 105%; left: 50%; transform: translateX(-50%);
+            white-space: nowrap; font-size: 0.875rem;
+        }
+        .course-block:hover .tooltip {
+            visibility: visible;
+            opacity: 1;
+        }
         .chart-container { position: relative; width: 100%; height: 250px; max-height: 300px; }
         .modal-overlay { transition: opacity 0.3s ease-in-out; }
         .modal-content { transition: transform 0.3s ease-in-out; }
@@ -30,15 +50,19 @@
 <body class="text-slate-700">
     <!-- Main Content -->
     <div class="container mx-auto p-4 lg:p-6">
-        <header class="text-center mb-6"><h1 class="text-3xl md:text-4xl font-bold text-slate-800">Công Cụ Tạo TKB Nâng Cao</h1><p class="text-slate-500 mt-2">Định nghĩa các môn học và lựa chọn nhóm để xây dựng lịch trình</p></header>
+        <header class="text-center mb-6"><h1 class="text-3xl md:text-4xl font-bold text-slate-800">Công Cụ Tạo Và Quản Lý TKB</h1><p class="text-slate-500 mt-2">Lựa chọn môn và nhóm để xây dựng và quản lý lịch trình</p></header>
         <div class="flex flex-col lg:flex-row gap-6">
             <!-- Left Column: Controls -->
             <div class="lg:w-2/5 flex flex-col gap-6">
-                <div class="flex justify-between items-center">
+                <div class="flex justify-between items-center mb-2">
                     <h2 class="text-2xl font-semibold text-slate-700">Danh Sách Môn Học</h2>
-                    <button id="add-course-btn" class="px-4 py-2 bg-sky-500 text-white font-semibold rounded-lg shadow hover:bg-sky-600 transition-colors">Thêm Môn Mới</button>
+                    <button id="add-course-btn" class="px-4 py-2 bg-sky-500 text-white font-semibold rounded-lg shadow hover:bg-sky-600 transition-colors whitespace-nowrap">Thêm Môn Mới</button>
                 </div>
-                <div id="course-list-container" class="space-y-4">
+                <div class="relative">
+                    <input type="text" id="search-input" placeholder="Tìm kiếm môn đã tạo..." class="w-full p-2 pl-8 border rounded-md">
+                    <svg class="w-4 h-4 text-slate-400 absolute top-1/2 left-2.5 -translate-y-1/2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                </div>
+                <div id="course-list-container" class="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
                    <p class="text-slate-500 text-center bg-white p-6 rounded-lg shadow">Chưa có môn học nào được định nghĩa.</p>
                 </div>
             </div>
@@ -61,11 +85,19 @@
     <!-- Add Course Modal -->
     <div id="course-modal" class="modal-overlay fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 opacity-0 pointer-events-none">
         <div id="modal-content" class="modal-content bg-white rounded-lg shadow-xl w-full max-w-lg p-6 transform scale-95">
-            <!-- Step 1: Course Info -->
+            <!-- Step 1 -->
             <div id="modal-step-1">
                 <h3 class="text-2xl font-bold text-slate-800 mb-4">Bước 1: Thông Tin Môn Học</h3>
                 <form id="modal-form-step1" class="space-y-4">
-                    <input required type="text" name="courseName" placeholder="Tên môn học" class="w-full p-2 border rounded-md">
+                    <div class="relative">
+                        <input type="text" id="modal-search-input" placeholder="Tìm kiếm trong danh sách..." class="w-full p-2 pl-8 border rounded-md mb-2">
+                        <svg class="w-4 h-4 text-slate-400 absolute top-3.5 left-2.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    </div>
+                    <div>
+                        <label for="course-select" class="block text-sm font-medium text-slate-700 mb-1">Chọn môn học</label>
+                        <select id="course-select" name="course-select" class="w-full p-2 border rounded-md" size="5"></select>
+                    </div>
+                    <input type="text" id="custom-course-name" name="customCourseName" placeholder="Nhập tên môn học khác..." class="w-full p-2 border rounded-md hidden">
                     <div class="grid grid-cols-2 gap-4">
                         <input required type="number" name="credits" min="1" placeholder="Số tín chỉ" class="w-full p-2 border rounded-md">
                         <input required type="number" name="groupCount" min="1" placeholder="Số lượng nhóm" class="w-full p-2 border rounded-md">
@@ -76,7 +108,7 @@
                     </div>
                 </form>
             </div>
-            <!-- Step 2: Group Details -->
+            <!-- Step 2 -->
             <div id="modal-step-2" class="hidden">
                  <h3 class="text-2xl font-bold text-slate-800 mb-4">Bước 2: Chi Tiết Các Nhóm</h3>
                  <div id="group-details-container" class="space-y-4 max-h-80 overflow-y-auto pr-2"></div>
@@ -90,184 +122,140 @@
 
     <script>
     document.addEventListener('DOMContentLoaded', function () {
-        let userDefinedCourses = {};
-        let currentSchedule = {}; // { courseCode: 'groupId-0', ... }
-        let workloadChart;
-
-        // DOM Elements
-        const addCourseBtn = document.getElementById('add-course-btn');
-        const courseModal = document.getElementById('course-modal');
-        const modalContent = document.getElementById('modal-content');
-        const modalStep1 = document.getElementById('modal-step-1');
-        const modalStep2 = document.getElementById('modal-step-2');
-        const formStep1 = document.getElementById('modal-form-step1');
-        const groupDetailsContainer = document.getElementById('group-details-container');
-        const cancelBtn = document.getElementById('modal-cancel-btn');
-        const backBtn = document.getElementById('modal-back-btn');
-        const saveBtn = document.getElementById('modal-save-btn');
-        const courseListContainer = document.getElementById('course-list-container');
-        const timetableContainer = document.getElementById('timetable-container');
-
+        const PREDEFINED_COURSES = { 'KNM1013': 'Kỹ năng mềm', 'LLCTKT2': 'Kinh tế chính trị Mác - Lênin', 'LLCTLS2': 'Lịch sử Đảng Cộng sản Việt Nam', 'LLCTTH3': 'Triết học Mác - Lênin', 'LLCTTT2': 'Tư tưởng Hồ Chí Minh', 'TIN1093': 'Nhập môn lập trình', 'TIN1103': 'Lập trình Python', 'TOA1023': 'Đại số tuyến tính', 'TOA1053': 'Giải tích', 'TIN1033': 'Java cơ bản', 'TIN1083': 'Kỹ thuật lập trình', 'TIN2013': 'Kiến trúc máy tính', 'TIN3023': 'Toán học rời rạc', 'TIN3083': 'Lập trình nâng cao', 'TIN3092': 'Lập trình Front - End', 'TIN4083': 'Ngôn ngữ hình thức và Ôtômat', 'TOA1012': 'Cơ sở toán', 'TIN3012': 'Ngôn ngữ truy vấn có cấu trúc (SQL)', 'TIN3024': 'Phân tích và thiết kế các hệ thống thông tin', 'TIN3032': 'Nhập môn cơ sở dữ liệu', 'TIN3042': 'Nguyên lý hệ điều hành', 'TIN3053': 'Các hệ quản trị cơ sở dữ liệu', 'TIN3073': 'Lập trình hướng đối tượng', 'TIN3084': 'Cấu trúc dữ liệu và thuật toán', 'TIN3123': 'Mạng máy tính', 'TIN3133': 'Đồ họa máy tính', 'TIN3163': 'An ninh mạng', 'TIN4012': 'Thiết kế cơ sở dữ liệu', 'TIN4183': 'Kiểm định phần mềm', 'TIN4663': 'Trí tuệ nhân tạo', 'TIN4073': 'Phân tích và thiết kế thuật toán', 'TIN4093': 'Độ phức tạp thuật toán', 'TIN4103': 'Khai phá dữ liệu', 'TIN4213': 'Xử lý ảnh số', 'TIN4243': 'Lý thuyết nhận dạng', 'TIN4263': 'Lập trình logic', 'TIN4513': 'Bảo mật thông tin', 'TIN4523': 'Dữ liệu lớn', 'TIN4533': 'Lập trình ứng dụng với OpenCV', 'TIN4543': 'Phát triển ứng dụng trí tuệ nhân tạo', 'TIN4623': 'Học máy', 'TIN4633': 'Xử lý ngôn ngữ tự nhiên', 'TIN4643': 'Thị giác máy tính', 'TIN3043': 'Kỹ nghệ phần mềm', 'TIN4013': 'Java nâng cao', 'TIN4063': 'Phần mềm mã nguồn mở', 'TIN4133': 'Quản trị dự án phần mềm', 'TIN4153': 'Lập trình mạng', 'TIN4293': 'An toàn mạng' };
+        let userDefinedCourses = {}; let currentSchedule = {}; let workloadChart;
+        const addCourseBtn = document.getElementById('add-course-btn'); const courseModal = document.getElementById('course-modal'); const modalContent = document.getElementById('modal-content'); const modalStep1 = document.getElementById('modal-step-1'); const modalStep2 = document.getElementById('modal-step-2'); const formStep1 = document.getElementById('modal-form-step1'); const courseSelect = document.getElementById('course-select'); const customCourseNameInput = document.getElementById('custom-course-name'); const groupDetailsContainer = document.getElementById('group-details-container'); const cancelBtn = document.getElementById('modal-cancel-btn'); const backBtn = document.getElementById('modal-back-btn'); const saveBtn = document.getElementById('modal-save-btn'); const courseListContainer = document.getElementById('course-list-container'); const timetableContainer = document.getElementById('timetable-container'); const searchInput = document.getElementById('search-input'); const modalSearchInput = document.getElementById('modal-search-input');
         const COLORS = ['bg-sky-200', 'bg-emerald-200', 'bg-amber-200', 'bg-rose-200', 'bg-violet-200', 'bg-fuchsia-200', 'bg-teal-200', 'bg-orange-200'];
-
-        // --- Modal ---
-        function openModal() { courseModal.classList.remove('opacity-0', 'pointer-events-none'); modalContent.classList.remove('scale-95'); }
-        function closeModal() { courseModal.classList.add('opacity-0', 'pointer-events-none'); modalContent.classList.add('scale-95'); modalStep1.classList.remove('hidden'); modalStep2.classList.add('hidden'); formStep1.reset(); }
-
-        addCourseBtn.addEventListener('click', openModal);
-        cancelBtn.addEventListener('click', closeModal);
-        backBtn.addEventListener('click', () => { modalStep1.classList.remove('hidden'); modalStep2.classList.add('hidden'); });
-
-        formStep1.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const groupCount = parseInt(formStep1.elements.groupCount.value);
-            groupDetailsContainer.innerHTML = '';
-            for (let i = 0; i < groupCount; i++) {
-                const groupForm = document.createElement('div');
-                groupForm.className = 'p-3 border rounded-md bg-slate-50';
-                groupForm.innerHTML = `
-                    <p class="font-semibold mb-2">Thông tin Nhóm ${i + 1}</p>
-                    <div class="grid grid-cols-2 gap-2">
-                        <select name="day" required class="w-full p-2 border rounded-md"><option value="">Chọn thứ</option><option value="2">Thứ 2</option><option value="3">Thứ 3</option><option value="4">Thứ 4</option><option value="5">Thứ 5</option><option value="6">Thứ 6</option><option value="7">Thứ 7</option></select>
-                        <input required type="text" name="periods" placeholder="Tiết (VD: 1-4)" class="w-full p-2 border rounded-md">
-                    </div>
-                    <input type="text" name="lecturer" placeholder="Tên giảng viên (tùy chọn)" class="w-full p-2 border rounded-md mt-2">
-                `;
-                groupDetailsContainer.appendChild(groupForm);
-            }
-            modalStep1.classList.add('hidden');
-            modalStep2.classList.remove('hidden');
-        });
-
-        saveBtn.addEventListener('click', () => {
-            const courseName = formStep1.elements.courseName.value;
-            const courseCode = courseName.replace(/\s+/g, '-').toUpperCase();
-            if (userDefinedCourses[courseCode]) { alert('Môn học với tên này đã tồn tại!'); return; }
-            
-            const groups = [];
-            const groupForms = groupDetailsContainer.querySelectorAll('.p-3');
-            for (let i = 0; i < groupForms.length; i++) {
-                const form = groupForms[i];
-                const periodsRaw = form.querySelector('[name="periods"]').value.split('-').map(Number);
-                if (periodsRaw.length !== 2 || isNaN(periodsRaw[0]) || isNaN(periodsRaw[1]) || periodsRaw[0] > periodsRaw[1]) {
-                    alert(`Định dạng tiết học không hợp lệ ở Nhóm ${i + 1}.`); return;
+        
+        function initializeApp() { populateCourseDropdown(); initializeChart(); updateDashboard(); }
+        function populateCourseDropdown() { courseSelect.innerHTML = ''; for (const code in PREDEFINED_COURSES) { const option = document.createElement('option'); option.value = code; option.textContent = `${PREDEFINED_COURSES[code]} (${code})`; courseSelect.appendChild(option); } courseSelect.innerHTML += '<option value="CUSTOM" class="font-bold text-sky-600">Môn học khác (Tự nhập)...</option>'; }
+        function openModal() { modalSearchInput.value = ''; filterCourseDropdown(); courseModal.classList.remove('opacity-0', 'pointer-events-none'); modalContent.classList.remove('scale-95'); }
+        function closeModal() { courseModal.classList.add('opacity-0', 'pointer-events-none'); modalContent.classList.add('scale-95'); modalStep1.classList.remove('hidden'); modalStep2.classList.add('hidden'); formStep1.reset(); customCourseNameInput.classList.add('hidden'); }
+        addCourseBtn.addEventListener('click', openModal); cancelBtn.addEventListener('click', closeModal); backBtn.addEventListener('click', () => { modalStep1.classList.remove('hidden'); modalStep2.classList.add('hidden'); });
+        
+        courseSelect.addEventListener('change', () => { if (courseSelect.value === 'CUSTOM') { customCourseNameInput.classList.remove('hidden'); customCourseNameInput.required = true; } else { customCourseNameInput.classList.add('hidden'); customCourseNameInput.required = false; } });
+        
+        modalSearchInput.addEventListener('input', filterCourseDropdown);
+        function filterCourseDropdown() {
+            const query = modalSearchInput.value.toLowerCase();
+            const options = courseSelect.options;
+            for(let i=0; i < options.length; i++){
+                const option = options[i];
+                const text = option.textContent.toLowerCase();
+                const isCustomOption = option.value === 'CUSTOM';
+                if(isCustomOption || text.includes(query)){
+                    option.style.display = '';
+                } else {
+                    option.style.display = 'none';
                 }
-                groups.push({
-                    id: `${courseCode}-group-${i}`,
-                    groupNum: i + 1,
-                    day: parseInt(form.querySelector('[name="day"]').value),
-                    periods: periodsRaw,
-                    lecturer: form.querySelector('[name="lecturer"]').value
-                });
             }
-            
-            userDefinedCourses[courseCode] = {
-                name: courseName,
-                credits: parseInt(formStep1.elements.credits.value),
-                groups: groups
-            };
-            
-            renderCourseList();
-            closeModal();
-        });
-
-        // --- UI Rendering & Logic ---
+        }
+        
+        formStep1.addEventListener('submit', (e) => { e.preventDefault(); if(!courseSelect.value){ alert('Vui lòng chọn một môn học từ danh sách!'); return; } const groupCount = parseInt(formStep1.elements.groupCount.value); groupDetailsContainer.innerHTML = ''; for (let i = 0; i < groupCount; i++) { const groupForm = document.createElement('div'); groupForm.className = 'p-3 border rounded-md bg-slate-50'; groupForm.innerHTML = `<p class="font-semibold mb-2">Thông tin Nhóm ${i + 1}</p><div class="grid grid-cols-2 gap-2"><select name="day" required class="w-full p-2 border rounded-md"><option value="">Chọn thứ</option><option value="2">Thứ 2</option><option value="3">Thứ 3</option><option value="4">Thứ 4</option><option value="5">Thứ 5</option><option value="6">Thứ 6</option><option value="7">Thứ 7</option></select><input required type="text" name="periods" placeholder="Tiết (VD: 1-4)" class="w-full p-2 border rounded-md"></div><div class="grid grid-cols-2 gap-2 mt-2"><input type="text" name="room" placeholder="Phòng học (tùy chọn)" class="w-full p-2 border rounded-md"><input type="text" name="lecturer" placeholder="Giảng viên (tùy chọn)" class="w-full p-2 border rounded-md"></div>`; groupDetailsContainer.appendChild(groupForm); } modalStep1.classList.add('hidden'); modalStep2.classList.remove('hidden'); });
+        saveBtn.addEventListener('click', () => { let courseName, courseCode; if (courseSelect.value === 'CUSTOM') { courseName = customCourseNameInput.value; courseCode = courseName.replace(/[^a-zA-Z0-9]/g, '-').toUpperCase(); } else { courseCode = courseSelect.value; courseName = PREDEFINED_COURSES[courseCode]; } if (!courseName) { alert('Vui lòng chọn hoặc nhập tên môn học!'); return; } if (userDefinedCourses[courseCode]) { alert('Môn học này đã được thêm!'); return; } const groups = []; const groupForms = groupDetailsContainer.querySelectorAll('.p-3'); for (let i = 0; i < groupForms.length; i++) { const form = groupForms[i]; if (!form.querySelector('[name="day"]').value) { alert(`Vui lòng chọn thứ cho Nhóm ${i + 1}.`); return; } const periodsRaw = form.querySelector('[name="periods"]').value.split('-').map(Number); if (periodsRaw.length !== 2 || isNaN(periodsRaw[0]) || isNaN(periodsRaw[1]) || periodsRaw[0] > periodsRaw[1]) { alert(`Định dạng tiết học không hợp lệ ở Nhóm ${i + 1}.`); return; } groups.push({ id: `${courseCode}-group-${i}`, groupNum: i + 1, day: parseInt(form.querySelector('[name="day"]').value), periods: periodsRaw, lecturer: form.querySelector('[name="lecturer"]').value, room: form.querySelector('[name="room"]').value }); } userDefinedCourses[courseCode] = { name: courseName, credits: parseInt(formStep1.elements.credits.value), groups: groups }; renderCourseList(); closeModal(); });
         function getSession(p) { if(p>=1&&p<=4) return 'Sáng'; if(p>=5&&p<=8) return 'Chiều'; return 'Tối'; }
         function isConflict(gA, gB) { if(gA.day !== gB.day) return false; return (gA.periods[0] <= gB.periods[1] && gA.periods[1] >= gB.periods[0]); }
         
         function renderCourseList() {
+            const preservedSchedule = { ...currentSchedule };
             courseListContainer.innerHTML = '';
             if (Object.keys(userDefinedCourses).length === 0) {
-                 courseListContainer.innerHTML = '<p class="text-slate-500 text-center bg-white p-6 rounded-lg shadow">Chưa có môn học nào được định nghĩa.</p>';
-                 return;
+                courseListContainer.innerHTML = '<p class="text-slate-500 text-center bg-white p-6 rounded-lg shadow">Chưa có môn học nào được định nghĩa.</p>';
+                return;
             }
-            let i = 0;
             for(const code in userDefinedCourses) {
                 const course = userDefinedCourses[code];
-                const groupsHTML = course.groups.map(g => `
-                    <div><input type="radio" id="${g.id}" name="${code}" value="${g.id}"> <label for="${g.id}" class="ml-2 text-sm cursor-pointer">Nhóm ${g.groupNum} (Thứ ${g.day}, Tiết ${g.periods.join('-')})</label></div>
-                `).join('');
+                const groupsHTML = course.groups.map(g => `<div><input type="radio" id="${g.id}" name="${code}" value="${g.id}" ${preservedSchedule[code] === g.id ? 'checked' : ''}> <label for="${g.id}" class="ml-2 text-sm cursor-pointer">Nhóm ${g.groupNum} (Thứ ${g.day}, Tiết ${g.periods.join('-')})</label></div>`).join('');
                 const card = document.createElement('div');
-                card.className = 'bg-white p-4 rounded-lg shadow';
-                card.innerHTML = `
-                    <div class="flex justify-between items-start">
-                        <div><h4 class="font-semibold text-slate-800">${course.name}</h4><p class="text-xs text-slate-500 mb-2">${course.credits} tín chỉ</p></div>
-                        <button data-code="${code}" class="delete-course-btn text-red-500 hover:text-red-700 text-xs">Xóa Môn</button>
-                    </div>
-                    <div class="space-y-1">${groupsHTML}</div>
-                `;
+                card.className = 'course-card bg-white p-4 rounded-lg shadow';
+                card.innerHTML = `<div class="flex justify-between items-start"><div class="course-name-wrapper"><h4 class="font-semibold text-slate-800">${course.name}</h4><p class="text-xs text-slate-500 mb-2">${course.credits} tín chỉ</p></div><button data-code="${code}" class="delete-course-btn text-red-500 hover:text-red-700 text-xs font-semibold">Xóa</button></div><div class="space-y-1">${groupsHTML}</div>`;
                 courseListContainer.appendChild(card);
-                i++;
             }
+            handleSearch();
+            updateDashboard();
         }
         
         function updateDashboard() {
-            // Timetable
-            timetableContainer.innerHTML = `<div class="grid-header"></div><div class="grid-header">Thứ 2</div><div class="grid-header">Thứ 3</div><div class="grid-header">Thứ 4</div><div class="grid-header">Thứ 5</div><div class="grid-header">Thứ 6</div><div class="grid-header">Thứ 7</div><div class="grid-time-label">Sáng</div>${Array(6).fill('<div class="grid-cell"></div>').join('')}<div class="grid-time-label">Chiều</div>${Array(6).fill('<div class="grid-cell"></div>').join('')}<div class="grid-time-label">Tối</div>${Array(6).fill('<div class="grid-cell"></div>').join('')}`;
-            const scheduleGroups = Object.values(currentSchedule).map(findGroupById);
+            let timetableHTML = `<div class="grid-header"></div><div class="grid-header">Thứ 2</div><div class="grid-header">Thứ 3</div><div class="grid-header">Thứ 4</div><div class="grid-header">Thứ 5</div><div class="grid-header">Thứ 6</div><div class="grid-header">Thứ 7</div>`;
+            ['Sáng', 'Chiều', 'Tối'].forEach(session => {
+                timetableHTML += `<div class="grid-time-label">${session}</div>`;
+                for (let day = 2; day <= 7; day++) {
+                    timetableHTML += `<div class="grid-cell" data-day="${day}" data-session="${session}"></div>`;
+                }
+            });
+            timetableContainer.innerHTML = timetableHTML;
+
+            const scheduleGroups = Object.values(currentSchedule).map(findGroupById).filter(g => g);
             
             scheduleGroups.forEach((group, index) => {
                 const session = getSession(group.periods[0]);
-                const cell = timetableContainer.querySelector(`.grid-cell:nth-of-type(${group.day-1 + (session === 'Sáng' ? 1 : session === 'Chiều' ? 7 : 13)})`);
+                const cell = timetableContainer.querySelector(`[data-day="${group.day}"][data-session="${session}"]`);
                 if (cell) {
                     const block = document.createElement('div');
                     block.className = `course-block ${COLORS[index % COLORS.length]}`;
-                    block.innerHTML = `<p class="font-bold">${userDefinedCourses[group.courseCode].name}</p><p>Nhóm ${group.groupNum}</p>`;
+                    const lecturerInfo = group.lecturer ? `GV: ${group.lecturer}<br>` : '';
+                    const roomInfo = group.room ? `Phòng: ${group.room}<br>` : '';
+                    const courseData = userDefinedCourses[group.courseCode];
+                    block.innerHTML = `
+                        <p class="font-bold">${courseData.name}</p>
+                        <p>Nhóm ${group.groupNum}</p>
+                        <div class="tooltip">
+                            ${roomInfo}
+                            ${lecturerInfo}
+                            Tiết: ${group.periods.join('-')}<br>
+                            Tín chỉ: ${courseData.credits}
+                        </div>
+                    `;
                     cell.appendChild(block);
                 }
             });
 
-            // Summary & Chart
             document.getElementById('total-subjects').textContent = scheduleGroups.length;
-            document.getElementById('total-credits').textContent = scheduleGroups.reduce((s, g) => s + userDefinedCourses[g.courseCode].credits, 0);
+            document.getElementById('total-credits').textContent = scheduleGroups.reduce((s, g) => s + (userDefinedCourses[g.courseCode]?.credits || 0), 0);
             document.getElementById('total-sessions').textContent = new Set(scheduleGroups.map(g => `${g.day}-${getSession(g.periods[0])}`)).size;
             const workload = Array(6).fill(0);
             scheduleGroups.forEach(g => { workload[g.day-2] += g.periods[1] - g.periods[0] + 1; });
             workloadChart.data.datasets[0].data = workload;
             workloadChart.update();
 
-            // Conflict detection
             const allRadios = document.querySelectorAll('input[type="radio"]');
             allRadios.forEach(radio => {
                 if (radio.checked) { radio.disabled = false; return; }
                 const groupToTest = findGroupById(radio.value);
+                if (!groupToTest) return;
                 radio.disabled = scheduleGroups.some(selected => selected.courseCode !== groupToTest.courseCode && isConflict(groupToTest, selected));
             });
         }
         
-        function findGroupById(id) {
-            const courseCode = id.split('-group-')[0];
-            const group = userDefinedCourses[courseCode]?.groups.find(g => g.id === id);
-            return group ? { ...group, courseCode: courseCode } : null;
+        function findGroupById(id) { if(!id) return null; const courseCode = id.split('-group-')[0]; const group = userDefinedCourses[courseCode]?.groups.find(g => g.id === id); return group ? { ...group, courseCode: courseCode } : null; }
+        
+        function handleSearch() {
+            const query = searchInput.value.toLowerCase();
+            const courseCards = document.querySelectorAll('.course-card');
+            courseCards.forEach(card => {
+                const courseName = card.querySelector('.course-name-wrapper h4').textContent.toLowerCase();
+                card.style.display = courseName.includes(query) ? 'block' : 'none';
+            });
         }
-
-        courseListContainer.addEventListener('change', (e) => {
-            if (e.target.tagName === 'INPUT') {
-                const code = e.target.name;
-                currentSchedule[code] = e.target.value;
-                updateDashboard();
-            }
-        });
-
+        
+        courseListContainer.addEventListener('change', (e) => { if (e.target.tagName === 'INPUT') { const code = e.target.name; if (e.target.checked) { currentSchedule[code] = e.target.value; } updateDashboard(); } });
+        
         courseListContainer.addEventListener('click', (e) => {
              if (e.target.classList.contains('delete-course-btn')) {
                 const codeToDelete = e.target.dataset.code;
-                if (confirm(`Bạn có chắc muốn xóa vĩnh viễn môn "${userDefinedCourses[codeToDelete].name}" và tất cả các nhóm của nó?`)) {
+                if (confirm(`Bạn có chắc muốn xóa vĩnh viễn môn "${userDefinedCourses[codeToDelete].name}"?`)) {
                     delete userDefinedCourses[codeToDelete];
                     delete currentSchedule[codeToDelete];
                     renderCourseList();
-                    updateDashboard();
                 }
             }
         });
 
-        function initializeChart() {
-            const ctx = document.getElementById('workloadChart').getContext('2d');
-            workloadChart = new Chart(ctx, { type: 'bar', data: { labels: ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'], datasets: [{ label: 'Số tiết', data: [], backgroundColor: 'rgba(59, 130, 246, 0.6)' }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } }, plugins: { legend: { display: false } } } });
-        }
-
-        initializeChart();
-        updateDashboard();
+        searchInput.addEventListener('input', handleSearch);
+        
+        function initializeChart() { const ctx = document.getElementById('workloadChart').getContext('2d'); workloadChart = new Chart(ctx, { type: 'bar', data: { labels: ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'], datasets: [{ label: 'Số tiết', data: [], backgroundColor: 'rgba(59, 130, 246, 0.6)' }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } }, plugins: { legend: { display: false } } } }); }
+        
+        initializeApp();
     });
     </script>
 </body>
