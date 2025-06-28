@@ -7,13 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Chosen Palette: Warm Neutrals (Slate) with vibrant accents (Sky, Emerald, Amber, Violet) -->
-    <!-- Application Structure Plan: The layout remains a two-column design with a modal for data entry. The key addition is a search input field in the left column to filter the list of user-defined courses. This addresses a key usability issue when the list of defined courses becomes long, allowing users to quickly find the course they wish to interact with. -->
-    <!-- Visualization & Content Choices: 
-        - Dual Search Filters: Goal -> Organize/Interact. Viz -> Two text input fields in different locations. Interaction -> (1) Modal search filters the <select> dropdown. (2) Main page search filters the created course cards. Justification -> This layered search functionality significantly improves the user experience by providing context-specific filtering, making both finding a course to define and finding a defined course to schedule much easier. Method -> JS event listeners on both inputs, manipulating display properties of target elements.
-        - Other components (Modal, Course List, Timetable, Chart) are unchanged in function but are now supported by a more robust and user-friendly interface.
-    -->
-    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
         .timetable-grid { display: grid; grid-template-columns: 50px repeat(6, 1fr); grid-template-rows: auto repeat(3, 1fr); gap: 4px; }
