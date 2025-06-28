@@ -45,6 +45,20 @@
         .modal-overlay { transition: opacity 0.3s ease-in-out; }
         .modal-content { transition: transform 0.3s ease-in-out; }
         input[type="radio"]:disabled + label { opacity: 0.5; cursor: not-allowed; text-decoration: line-through; }
+        
+        @keyframes spectrum-animation {
+            0%, 100% { border-color: #ff00de; box-shadow: 0 0 5px #ff00de; }
+            16% { border-color: #8b00ff; box-shadow: 0 0 5px #8b00ff; }
+            33% { border-color: #0073ff; box-shadow: 0 0 5px #0073ff; }
+            50% { border-color: #00ff8b; box-shadow: 0 0 5px #00ff8b; }
+            66% { border-color: #ffff00; box-shadow: 0 0 5px #ffff00; }
+            83% { border-color: #ff7f00; box-shadow: 0 0 5px #ff7f00; }
+        }
+        .spectrum-button {
+            animation: spectrum-animation 3s linear infinite;
+            border-width: 2px;
+            border-style: solid;
+        }
     </style>
 </head>
 <body class="text-slate-700">
@@ -80,11 +94,18 @@
                 </div>
             </div>
         </div>
+         <!-- Fun button at the end of content -->
+        <footer class="pt-10">
+            <a href="https://youtu.be/dQw4w9WgXcQ?si=nJ4BGCfJLoRBWuvN" target="_blank"
+               class="spectrum-button inline-block px-5 py-2 bg-white text-slate-800 font-bold text-base rounded-full shadow-lg transition-transform duration-300 hover:scale-110">
+                hehe
+            </a>
+        </footer>
     </div>
 
     <!-- Add Course Modal -->
     <div id="course-modal" class="modal-overlay fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 opacity-0 pointer-events-none">
-        <div id="modal-content" class="modal-content bg-white rounded-lg shadow-xl w-full max-w-lg p-6 transform scale-95">
+        <div class="modal-content bg-white rounded-lg shadow-xl w-full max-w-lg p-6 transform scale-95">
             <!-- Step 1 -->
             <div id="modal-step-1">
                 <h3 class="text-2xl font-bold text-slate-800 mb-4">Bước 1: Thông Tin Môn Học</h3>
@@ -129,9 +150,9 @@
         
         function initializeApp() { populateCourseDropdown(); initializeChart(); updateDashboard(); }
         function populateCourseDropdown() { courseSelect.innerHTML = ''; for (const code in PREDEFINED_COURSES) { const option = document.createElement('option'); option.value = code; option.textContent = `${PREDEFINED_COURSES[code]} (${code})`; courseSelect.appendChild(option); } courseSelect.innerHTML += '<option value="CUSTOM" class="font-bold text-sky-600">Môn học khác (Tự nhập)...</option>'; }
-        function openModal() { modalSearchInput.value = ''; filterCourseDropdown(); courseModal.classList.remove('opacity-0', 'pointer-events-none'); modalContent.classList.remove('scale-95'); }
-        function closeModal() { courseModal.classList.add('opacity-0', 'pointer-events-none'); modalContent.classList.add('scale-95'); modalStep1.classList.remove('hidden'); modalStep2.classList.add('hidden'); formStep1.reset(); customCourseNameInput.classList.add('hidden'); }
-        addCourseBtn.addEventListener('click', openModal); cancelBtn.addEventListener('click', closeModal); backBtn.addEventListener('click', () => { modalStep1.classList.remove('hidden'); modalStep2.classList.add('hidden'); });
+        function openCourseModal() { modalSearchInput.value = ''; filterCourseDropdown(); courseModal.classList.remove('opacity-0', 'pointer-events-none'); courseModal.querySelector('.modal-content').classList.remove('scale-95'); }
+        function closeCourseModal() { courseModal.classList.add('opacity-0', 'pointer-events-none'); courseModal.querySelector('.modal-content').classList.add('scale-95'); modalStep1.classList.remove('hidden'); modalStep2.classList.add('hidden'); formStep1.reset(); customCourseNameInput.classList.add('hidden'); }
+        addCourseBtn.addEventListener('click', openCourseModal); cancelBtn.addEventListener('click', closeCourseModal); backBtn.addEventListener('click', () => { modalStep1.classList.remove('hidden'); modalStep2.classList.add('hidden'); });
         
         courseSelect.addEventListener('change', () => { if (courseSelect.value === 'CUSTOM') { customCourseNameInput.classList.remove('hidden'); customCourseNameInput.required = true; } else { customCourseNameInput.classList.add('hidden'); customCourseNameInput.required = false; } });
         
@@ -152,7 +173,7 @@
         }
         
         formStep1.addEventListener('submit', (e) => { e.preventDefault(); if(!courseSelect.value){ alert('Vui lòng chọn một môn học từ danh sách!'); return; } const groupCount = parseInt(formStep1.elements.groupCount.value); groupDetailsContainer.innerHTML = ''; for (let i = 0; i < groupCount; i++) { const groupForm = document.createElement('div'); groupForm.className = 'p-3 border rounded-md bg-slate-50'; groupForm.innerHTML = `<p class="font-semibold mb-2">Thông tin Nhóm ${i + 1}</p><div class="grid grid-cols-2 gap-2"><select name="day" required class="w-full p-2 border rounded-md"><option value="">Chọn thứ</option><option value="2">Thứ 2</option><option value="3">Thứ 3</option><option value="4">Thứ 4</option><option value="5">Thứ 5</option><option value="6">Thứ 6</option><option value="7">Thứ 7</option></select><input required type="text" name="periods" placeholder="Tiết (VD: 1-4)" class="w-full p-2 border rounded-md"></div><div class="grid grid-cols-2 gap-2 mt-2"><input type="text" name="room" placeholder="Phòng học (tùy chọn)" class="w-full p-2 border rounded-md"><input type="text" name="lecturer" placeholder="Giảng viên (tùy chọn)" class="w-full p-2 border rounded-md"></div>`; groupDetailsContainer.appendChild(groupForm); } modalStep1.classList.add('hidden'); modalStep2.classList.remove('hidden'); });
-        saveBtn.addEventListener('click', () => { let courseName, courseCode; if (courseSelect.value === 'CUSTOM') { courseName = customCourseNameInput.value; courseCode = courseName.replace(/[^a-zA-Z0-9]/g, '-').toUpperCase(); } else { courseCode = courseSelect.value; courseName = PREDEFINED_COURSES[courseCode]; } if (!courseName) { alert('Vui lòng chọn hoặc nhập tên môn học!'); return; } if (userDefinedCourses[courseCode]) { alert('Môn học này đã được thêm!'); return; } const groups = []; const groupForms = groupDetailsContainer.querySelectorAll('.p-3'); for (let i = 0; i < groupForms.length; i++) { const form = groupForms[i]; if (!form.querySelector('[name="day"]').value) { alert(`Vui lòng chọn thứ cho Nhóm ${i + 1}.`); return; } const periodsRaw = form.querySelector('[name="periods"]').value.split('-').map(Number); if (periodsRaw.length !== 2 || isNaN(periodsRaw[0]) || isNaN(periodsRaw[1]) || periodsRaw[0] > periodsRaw[1]) { alert(`Định dạng tiết học không hợp lệ ở Nhóm ${i + 1}.`); return; } groups.push({ id: `${courseCode}-group-${i}`, groupNum: i + 1, day: parseInt(form.querySelector('[name="day"]').value), periods: periodsRaw, lecturer: form.querySelector('[name="lecturer"]').value, room: form.querySelector('[name="room"]').value }); } userDefinedCourses[courseCode] = { name: courseName, credits: parseInt(formStep1.elements.credits.value), groups: groups }; renderCourseList(); closeModal(); });
+        saveBtn.addEventListener('click', () => { let courseName, courseCode; if (courseSelect.value === 'CUSTOM') { courseName = customCourseNameInput.value; courseCode = courseName.replace(/[^a-zA-Z0-9]/g, '-').toUpperCase(); } else { courseCode = courseSelect.value; courseName = PREDEFINED_COURSES[courseCode]; } if (!courseName) { alert('Vui lòng chọn hoặc nhập tên môn học!'); return; } if (userDefinedCourses[courseCode]) { alert('Môn học này đã được thêm!'); return; } const groups = []; const groupForms = groupDetailsContainer.querySelectorAll('.p-3'); for (let i = 0; i < groupForms.length; i++) { const form = groupForms[i]; if (!form.querySelector('[name="day"]').value) { alert(`Vui lòng chọn thứ cho Nhóm ${i + 1}.`); return; } const periodsRaw = form.querySelector('[name="periods"]').value.split('-').map(Number); if (periodsRaw.length !== 2 || isNaN(periodsRaw[0]) || isNaN(periodsRaw[1]) || periodsRaw[0] > periodsRaw[1]) { alert(`Định dạng tiết học không hợp lệ ở Nhóm ${i + 1}.`); return; } groups.push({ id: `${courseCode}-group-${i}`, groupNum: i + 1, day: parseInt(form.querySelector('[name="day"]').value), periods: periodsRaw, lecturer: form.querySelector('[name="lecturer"]').value, room: form.querySelector('[name="room"]').value }); } userDefinedCourses[courseCode] = { name: courseName, credits: parseInt(formStep1.elements.credits.value), groups: groups }; renderCourseList(); closeCourseModal(); });
         function getSession(p) { if(p>=1&&p<=4) return 'Sáng'; if(p>=5&&p<=8) return 'Chiều'; return 'Tối'; }
         function isConflict(gA, gB) { if(gA.day !== gB.day) return false; return (gA.periods[0] <= gB.periods[1] && gA.periods[1] >= gB.periods[0]); }
         
